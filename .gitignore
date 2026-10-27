@@ -6,3 +6,8 @@ android/local.properties
 android/.idea/
 *.iml
 .DS_Store
+dist/
+windows/publish/
+windows/**/bin/
+windows/**/obj/
+windows/FocusWall.Desktop/firebase.json

@@ -1,0 +1,123 @@
+# FocusWall
+
+Бесплатный блокировщик отвлекающих приложений и сайтов для Android, Windows и браузера.
+Один аккаунт Google, общие списки и расписание на всех устройствах.
+
+По умолчанию каждый день **с 21:00 до 05:00** включается жёсткая блокировка:
+
+- **Ноутбук (Windows 10):** полноэкранный экран блокировки поверх всего, закрыть нельзя.
+- **Телефон (Android):** работают только звонки, Сбербанк Онлайн и часы (чтобы звонил будильник).
+- **Браузер:** открываются только разрешённые сайты.
+
+## Что в репозитории
+
+| Папка | Что это |
+|---|---|
+| `android/` | Приложение для Android (Kotlin, Jetpack Compose). Собирается в `FocusWall.apk`. |
+| `windows/` | Программа для Windows (C#, .NET 8) и установщик `FocusWall-Setup.exe`. |
+| `extension/` | Расширение для Chrome, Edge, Brave и Яндекс Браузера. |
+| `firebase/` | Правила доступа Firestore. |
+| `tests/` | Тесты общей логики и проверка расширения в браузере. |
+
+Логика «что блокировать сейчас» одинаковая во всех трёх частях: `extension/core.js`,
+`android/.../core/Policy.kt`, `windows/.../Rules.cs`. При изменениях правьте все три.
+
+## Как это работает
+
+- **Списки** бывают двух видов: «блокировать перечисленное» (чёрный список) и «блокировать всё, кроме
+  перечисленного» (белый список). В списке есть сайты, приложения Android (имя пакета) и программы Windows (имя .exe).
+  Белый список без единой программы Windows означает полную блокировку компьютера.
+- **Расписание** включает списки по дням недели и часам, в том числе через полночь.
+- **Сессия** включает списки сейчас на заданное время.
+- **Жёсткий режим.** Пока он действует, блокировку нельзя остановить, а списки можно только ужесточить.
+  На Android закрываются экраны настроек, где можно отключить или удалить FocusWall. На Windows нельзя выйти из программы,
+  а если поверх экрана блокировки окажется другое окно, сеанс Windows блокируется.
+- **Синхронизация** через Firebase: документ `users/{uid}` с полями `config` и `session` (JSON-строки) и временем их
+  изменения. Побеждает более свежая версия. Устройства проверяют изменения раз в минуту, а расписание срабатывает
+  по часам устройства даже без интернета.
+
+## Готовые файлы
+
+Каждый пуш в `main` собирает APK, установщик Windows и архив расширения (GitHub Actions, `.github/workflows/build.yml`)
+и выкладывает их в релиз **latest** на странице Releases.
+
+## Установка
+
+### Android
+
+1. Скачайте `FocusWall.apk` из релиза и откройте его на телефоне, разрешите установку из этого источника.
+2. На Android 13 и новее: Настройки → Приложения → FocusWall → меню ⋮ → **Разрешить ограниченные настройки**.
+   Без этого Android не даст включить службу специальных возможностей для приложения не из Google Play.
+3. Откройте FocusWall → «Блокировка приложений» → «Включить» → включите FocusWall в «Специальных возможностях».
+4. Включите «Фильтр сайтов» и подтвердите запрос на VPN. Трафик никуда не уходит: через VPN идут только DNS-запросы.
+5. Желательно: Настройки → Сеть → VPN → FocusWall → «Постоянная VPN», и отключите для FocusWall экономию батареи.
+6. Войдите через Google.
+
+### Windows 10
+
+1. Скачайте и запустите `FocusWall-Setup.exe`. Права администратора не нужны.
+2. Значок FocusWall появится в трее. Программа запускается вместе с Windows, а сторож в Планировщике заданий
+   перезапускает её раз в минуту, если её закрыли.
+3. Правой кнопкой по значку → «Войти через Google…».
+
+### Браузер
+
+1. Распакуйте `FocusWall-extension.zip`.
+2. Откройте `chrome://extensions` (или `edge://extensions`), включите «Режим разработчика» → «Загрузить распакованное».
+3. Нажмите значок FocusWall → «Войти через Google». Списки и расписание редактируются в «Настройках» расширения.
+
+## Настройка Firebase (один раз, бесплатно)
+
+Без этого всё работает, но только на одном устройстве и без входа.
+
+1. Создайте проект на [console.firebase.google.com](https://console.firebase.google.com).
+2. **Authentication → Sign-in method → Google** → включить.
+3. **Firestore Database** → создать базу. Во вкладке **Rules** вставьте содержимое `firebase/firestore.rules`.
+4. **Project settings → General**: скопируйте *Web API Key* и *Project ID*.
+5. В [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials) того же проекта:
+   - **Web client** (создан Firebase автоматически, «Web client (auto created by Google Service)»): его ID нужен Android.
+   - **OAuth client → Android**: пакет `com.focuswall.app` и SHA-1 ключа, которым подписан APK
+     (`keytool -list -v -keystore ~/.android/debug.keystore -storepass android`).
+   - **OAuth client → Web application** для расширения: в *Authorized redirect URIs* добавьте
+     `https://<ID расширения>.chromiumapp.org/` (ID виден на странице `chrome://extensions`).
+   - **OAuth client → Desktop app** для Windows: понадобятся Client ID и Client secret.
+6. В репозитории на GitHub: **Settings → Secrets and variables → Actions** добавьте:
+
+| Секрет | Значение |
+|---|---|
+| `FIREBASE_API_KEY` | Web API Key |
+| `FIREBASE_PROJECT_ID` | Project ID |
+| `GOOGLE_WEB_CLIENT_ID` | Client ID веб-клиента из пункта 5 (для Android) |
+| `GOOGLE_EXTENSION_CLIENT_ID` | Client ID клиента для расширения |
+| `GOOGLE_DESKTOP_CLIENT_ID` | Client ID клиента Desktop app |
+| `GOOGLE_DESKTOP_CLIENT_SECRET` | Client secret клиента Desktop app |
+| `ANDROID_DEBUG_KEYSTORE` | необязательно: `base64` от постоянного ключа подписи, чтобы новые версии APK ставились поверх старых |
+
+После этого следующая сборка будет со входом через Google.
+
+Для локальной сборки Android те же значения можно положить в `android/local.properties`:
+
+```
+FIREBASE_API_KEY=...
+FIREBASE_PROJECT_ID=...
+GOOGLE_WEB_CLIENT_ID=...
+```
+
+Для Windows создайте `windows/FocusWall.Desktop/firebase.json` по образцу `firebase.example.json`.
+
+## Разработка
+
+```
+node --test tests/*.test.mjs          # общая логика
+node tests/e2e-extension.cjs /tmp     # расширение в настоящем Chromium (нужен Playwright)
+cd android && ./gradlew testDebugUnitTest assembleDebug
+dotnet publish windows/FocusWall.Desktop -c Release -r win-x64
+```
+
+## Ограничения
+
+- На Android блокировку сайтов обходит «Частный DNS» в строгом режиме. Тогда сайты в браузерах всё равно закрываются
+  через адресную строку, но только в известных браузерах (Chrome, Firefox, Edge, Samsung Internet, Opera, Brave, Яндекс).
+- Расширение браузера можно удалить. Ночью это неважно: ноутбук блокируется целиком.
+- Днём программу для Windows можно удалить через «Приложения и возможности». Это осознанный выбор: FocusWall
+  помогает держать слово, а не защищает от администратора компьютера.

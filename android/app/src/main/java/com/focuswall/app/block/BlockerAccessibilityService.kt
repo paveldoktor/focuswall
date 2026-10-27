@@ -1,0 +1,155 @@
+package com.focuswall.app.block
+
+import android.accessibilityservice.AccessibilityService
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.telecom.TelecomManager
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.InputMethodManager
+import com.focuswall.app.core.PolicyMode
+import com.focuswall.app.core.Rules
+import com.focuswall.app.data.Store
+import com.focuswall.app.data.SyncManager
+
+/**
+ * Следит за тем, какое приложение на экране, и закрывает запрещённые.
+ * В браузерах дополнительно читает адресную строку и закрывает запрещённые сайты.
+ */
+class BlockerAccessibilityService : AccessibilityService() {
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var store: Store
+    private var lastBrowserCheck = 0L
+    private var lastBlockAt = 0L
+
+    private val tick = object : Runnable {
+        override fun run() {
+            SyncManager.syncAsync(this@BlockerAccessibilityService)
+            DnsVpnService.ensureRunning(this@BlockerAccessibilityService)
+            // Если блокировка включилась по расписанию, пока открыто запрещённое приложение.
+            rootInActiveWindow?.packageName?.toString()?.let { checkApp(it) }
+            handler.postDelayed(this, 30_000)
+        }
+    }
+
+    override fun onServiceConnected() {
+        store = Store.get(this)
+        handler.post(tick)
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(tick)
+        super.onDestroy()
+    }
+
+    override fun onInterrupt() {}
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (!checkApp(pkg)) checkBrowser(pkg, force = true)
+            }
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> checkBrowser(pkg, force = false)
+        }
+    }
+
+    /** true, если приложение заблокировано и закрыто. */
+    private fun checkApp(pkg: String): Boolean {
+        if (pkg in alwaysAllowed()) return false
+        if (store.hardActive() && isTryingToDisableUs(pkg)) {
+            block(pkg, "Во время жёсткой блокировки FocusWall нельзя отключить")
+            return true
+        }
+        val policy = store.appPolicy()
+        if (policy.mode == PolicyMode.OFF || !Rules.isAppBlocked(pkg, policy)) return false
+        // Системные экраны (настройки, установщик) в белом списке тоже закрываются: иначе блокировку легко снять.
+        block(pkg, appLabel(pkg))
+        return true
+    }
+
+    private fun checkBrowser(pkg: String, force: Boolean) {
+        val ids = BROWSER_URL_BARS[pkg] ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastBrowserCheck < 800) return
+        lastBrowserCheck = now
+        val policy = store.sitePolicy()
+        if (policy.mode == PolicyMode.OFF) return
+        val root = rootInActiveWindow ?: return
+        for (id in ids) {
+            val node = root.findAccessibilityNodeInfosByViewId("$pkg:id/$id").firstOrNull() ?: continue
+            if (node.isFocused) return // пользователь ещё печатает адрес
+            val host = Rules.normalizeDomain(node.text?.toString() ?: "")
+            if (host.isNotEmpty() && Rules.isHostBlocked(host, policy)) block(pkg, host)
+            return
+        }
+    }
+
+    /** Экран настроек или удаления, где упоминается FocusWall. */
+    private fun isTryingToDisableUs(pkg: String): Boolean {
+        if (pkg !in SETTINGS_PACKAGES) return false
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: return false
+        return root.findAccessibilityNodeInfosByText("FocusWall").isNotEmpty()
+    }
+
+    private fun block(pkg: String, what: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastBlockAt < 600) return
+        lastBlockAt = now
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        startActivity(
+            Intent(this, BlockedActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(BlockedActivity.EXTRA_WHAT, what)
+                .putExtra(BlockedActivity.EXTRA_PACKAGE, pkg),
+        )
+    }
+
+    private fun appLabel(pkg: String): String = try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) {
+        pkg
+    }
+
+    private var cachedAllowed: Set<String>? = null
+    private var cachedAllowedAt = 0L
+
+    /** Без этих пакетов телефоном нельзя пользоваться совсем: рабочий стол, звонки, клавиатура, системный интерфейс. */
+    private fun alwaysAllowed(): Set<String> {
+        val now = System.currentTimeMillis()
+        cachedAllowed?.let { if (now - cachedAllowedAt < 60_000) return it }
+        val set = mutableSetOf(packageName, "android", "com.android.systemui", "com.android.phone", "com.android.server.telecom",
+            "com.android.emergency", "com.google.android.apps.safetyhub", "com.android.incallui")
+        val home = packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
+        home?.activityInfo?.packageName?.let { set += it }
+        runCatching { (getSystemService(TELECOM_SERVICE) as TelecomManager).defaultDialerPackage }.getOrNull()?.let { set += it }
+        runCatching {
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).enabledInputMethodList.forEach { set += it.packageName }
+        }
+        Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.substringBefore('/')?.let { set += it }
+        cachedAllowed = set
+        cachedAllowedAt = now
+        return set
+    }
+
+    companion object {
+        private val SETTINGS_PACKAGES = setOf(
+            "com.android.settings", "com.samsung.android.settings", "com.miui.securitycenter",
+            "com.google.android.packageinstaller", "com.android.packageinstaller", "com.google.android.permissioncontroller",
+        )
+
+        /** id адресной строки в популярных браузерах. */
+        private val BROWSER_URL_BARS = mapOf(
+            "com.android.chrome" to listOf("url_bar"),
+            "com.chrome.beta" to listOf("url_bar"),
+            "com.brave.browser" to listOf("url_bar"),
+            "com.microsoft.emmx" to listOf("url_bar"),
+            "com.opera.browser" to listOf("url_field"),
+            "org.mozilla.firefox" to listOf("mozac_browser_toolbar_url_view", "url_bar_title"),
+            "com.sec.android.app.sbrowser" to listOf("location_bar_edit_text"),
+            "com.yandex.browser" to listOf("bro_omnibar_address_title_text", "bro_omnibar_address_title"),
+        )
+    }
+}

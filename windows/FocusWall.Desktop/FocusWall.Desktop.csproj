@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>FocusWall</AssemblyName>
+    <RootNamespace>FocusWall.Desktop</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <Product>FocusWall</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+    <!-- Ключи Firebase. Файл не хранится в репозитории: в CI его создаёт сборка из секретов. -->
+    <EmbeddedResource Include="firebase.json" LogicalName="firebase.json" Condition="Exists('firebase.json')" />
+  </ItemGroup>
+
+</Project>

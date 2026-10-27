@@ -14,11 +14,13 @@ export function defaultConfig() {
     blocklists: [
       {
         id: 'night',
-        name: 'Ночь: только самое нужное',
+        name: 'Ночь: только звонки и Сбербанк',
         mode: 'allow',
         domains: [],
+        // Часы оставлены, иначе экран сработавшего будильника закрывался бы блокировкой.
         androidApps: [
           'com.google.android.dialer', 'com.android.dialer', 'com.samsung.android.dialer',
+          'ru.sberbankmobile',
           'com.google.android.deskclock', 'com.android.deskclock', 'com.sec.android.app.clockpackage',
         ],
         desktopApps: [],

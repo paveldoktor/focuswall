@@ -1,0 +1,115 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      GOOGLE_EXTENSION_CLIENT_ID: ${{ secrets.GOOGLE_EXTENSION_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests
+        run: node --test tests/*.test.mjs
+      - name: Firebase keys
+        if: ${{ env.FIREBASE_API_KEY != '' }}
+        run: |
+          sed -i "s|apiKey: ''|apiKey: '$FIREBASE_API_KEY'|; s|projectId: ''|projectId: '$FIREBASE_PROJECT_ID'|; s|googleClientId: ''|googleClientId: '$GOOGLE_EXTENSION_CLIENT_ID'|" extension/config.js
+      - name: Pack
+        run: mkdir dist && cd extension && zip -r ../dist/FocusWall-extension.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: dist/FocusWall-extension.zip
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+      ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Signing key
+        # Постоянный ключ подписи нужен, чтобы новые версии ставились поверх старых.
+        if: ${{ env.ANDROID_DEBUG_KEYSTORE != '' }}
+        run: mkdir -p ~/.android && echo "$ANDROID_DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+      - name: Build and test
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest assembleRelease
+          mkdir -p ../dist && cp app/build/outputs/apk/release/app-release.apk ../dist/FocusWall.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/FocusWall.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Firebase keys
+        shell: pwsh
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          if ($env:FIREBASE_API_KEY) {
+            @{ apiKey = $env:FIREBASE_API_KEY; projectId = $env:FIREBASE_PROJECT_ID;
+               desktopClientId = $env:GOOGLE_DESKTOP_CLIENT_ID; desktopClientSecret = $env:GOOGLE_DESKTOP_CLIENT_SECRET } |
+              ConvertTo-Json | Set-Content windows/FocusWall.Desktop/firebase.json -Encoding utf8
+          }
+      - name: Publish
+        run: dotnet publish windows/FocusWall.Desktop/FocusWall.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows/publish
+      - name: Installer
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc windows/installer.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/FocusWall-Setup.exe
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [extension, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/* --title "FocusWall (последняя сборка)" --notes "Сборка из ${GITHUB_SHA::7}" --prerelease

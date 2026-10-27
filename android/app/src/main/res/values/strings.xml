@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FocusWall</string>
+    <string name="accessibility_description">FocusWall закрывает запрещённые приложения и сайты во время блокировки. Служба видит только название открытого приложения и адрес в браузере, никуда их не отправляет.</string>
+</resources>
