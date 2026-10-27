@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>FocusWall</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { width: 340px; padding: 14px; }
+    .lists label { display: flex; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="row spread" style="margin-bottom: 12px">
+    <span class="logo"><img src="icons/icon48.png" alt="" />FocusWall</span>
+    <a href="options.html" target="_blank" class="small">Настройки</a>
+  </div>
+
+  <div id="status" class="card"></div>
+
+  <div id="startCard" class="card stack">
+    <h2>Заблокировать сейчас</h2>
+    <div id="lists" class="lists"></div>
+    <div class="row">
+      <select id="minutes">
+        <option value="25">25 минут</option>
+        <option value="50" selected>50 минут</option>
+        <option value="90">1,5 часа</option>
+        <option value="180">3 часа</option>
+        <option value="480">8 часов</option>
+      </select>
+      <label class="check"><input type="checkbox" id="hard" /> жёсткий режим</label>
+    </div>
+    <button id="start" class="primary">Начать</button>
+  </div>
+
+  <div class="card row spread" id="account"></div>
+  <div id="error" class="error small"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

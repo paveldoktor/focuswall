@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Настройки FocusWall</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { padding: 24px 16px 80px; }
+    main { max-width: 760px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    .field > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+    .name { font-weight: 600; width: 100%; }
+    .savebar {
+      position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px;
+      background: var(--card); border-top: 1px solid var(--line);
+    }
+    .savebar .inner { max-width: 760px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="row spread" style="margin-bottom: 16px">
+      <span class="logo"><img src="icons/icon48.png" alt="" />FocusWall</span>
+    </div>
+
+    <section>
+      <div class="row spread"><h1>Списки</h1><button id="addList">+ Список</button></div>
+      <p class="muted small">
+        «Блокировать перечисленное» работает как обычный чёрный список. «Блокировать всё, кроме перечисленного»
+        оставляет доступными только указанные сайты и приложения.
+      </p>
+      <div id="lists"></div>
+    </section>
+
+    <section style="margin-top: 24px">
+      <div class="row spread"><h1>Расписание</h1><button id="addSchedule">+ Расписание</button></div>
+      <p class="muted small">Расписание включается само на всех устройствах, где выполнен вход.</p>
+      <div id="schedules"></div>
+    </section>
+  </main>
+
+  <div class="savebar">
+    <div class="inner row spread">
+      <span id="msg" class="small"></span>
+      <button id="save" class="primary">Сохранить</button>
+    </div>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
