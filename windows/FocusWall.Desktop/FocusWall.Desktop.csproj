@@ -9,7 +9,7 @@
     <AssemblyName>FocusWall</AssemblyName>
     <RootNamespace>FocusWall.Desktop</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>0.1.0</Version>
+    <Version>1.1.0</Version>
     <Product>FocusWall</Product>
   </PropertyGroup>
 
