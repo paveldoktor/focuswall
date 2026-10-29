@@ -88,12 +88,16 @@ public sealed class Enforcer : IDisposable
 
     void ShowLock(DateTime? until)
     {
+        // Звук для сна включаем вместе с экраном блокировки.
+        SleepSound.Play(SleepSound.Find(Store.Get().SleepSound));
+
         if (_locks.Count != Screen.AllScreens.Length)
         {
             HideLock();
             foreach (var screen in Screen.AllScreens)
             {
-                var f = new LockForm(screen);
+                // Выбор звука показываем только на главном экране.
+                var f = new LockForm(screen, withControls: screen.Primary);
                 f.Show();
                 _locks.Add(f);
             }
@@ -124,6 +128,7 @@ public sealed class Enforcer : IDisposable
 
     void HideLock()
     {
+        SleepSound.Stop();
         foreach (var f in _locks) f.ForceClose();
         _locks.Clear();
         _notOnTopSince = DateTime.MaxValue;

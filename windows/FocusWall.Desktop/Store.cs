@@ -18,6 +18,9 @@ public sealed class State
     public Auth? Auth { get; set; }
     public long LastSync { get; set; }
     public string SyncError { get; set; } = "";
+
+    /// <summary>Id звука для сна на экране блокировки (см. SleepSound). "none" — тишина.</summary>
+    public string SleepSound { get; set; } = "rain";
 }
 
 public static class Store

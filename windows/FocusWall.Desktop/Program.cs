@@ -37,19 +37,22 @@ static class Program
         {
             // Не критично.
         }
+        // Сторож: раз в минуту запускает программу, если её закрыли (лишняя копия сразу выходит по мьютексу).
+        RunSchtasks($"/Create /F /SC MINUTE /MO 1 /TN \"FocusWall Watchdog\" /TR \"\\\"{exe}\\\"\"");
+        // Отдельно — гарантированный запуск каждый вечер в 21:00, к началу ночной блокировки.
+        RunSchtasks($"/Create /F /SC DAILY /ST 21:00 /TN \"FocusWall Night\" /TR \"\\\"{exe}\\\"\"");
+    }
+
+    static void RunSchtasks(string args)
+    {
         try
         {
-            var psi = new ProcessStartInfo("schtasks.exe",
-                $"/Create /F /SC MINUTE /MO 1 /TN \"FocusWall Watchdog\" /TR \"\\\"{exe}\\\"\"")
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
+            var psi = new ProcessStartInfo("schtasks.exe", args) { CreateNoWindow = true, UseShellExecute = false };
             Process.Start(psi)?.WaitForExit(5000);
         }
         catch
         {
-            // Не критично.
+            // Не критично: автозапуск через реестр всё равно прописан.
         }
     }
 }

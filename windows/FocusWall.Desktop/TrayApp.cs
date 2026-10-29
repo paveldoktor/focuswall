@@ -61,6 +61,31 @@ public sealed class TrayApp : ApplicationContext
             }
             menu.Items.Add(start);
         }
+
+        // Выбор звука для сна (играет во время ночной блокировки).
+        var sound = new ToolStripMenuItem("Звук для сна");
+        foreach (var choice in SleepSound.All())
+        {
+            var item = new ToolStripMenuItem(choice.Title) { Checked = choice.Id == st.SleepSound };
+            item.Click += (_, _) =>
+            {
+                Store.Update(s => s.SleepSound = choice.Id);
+                SleepSound.Play(choice);
+                // Если блокировки сейчас нет, проигрываем короткую пробу и останавливаем.
+                if (!Rules.HardActive(st.Config, st.Session, DateTime.Now)) PreviewSound(choice);
+            };
+            sound.DropDownItems.Add(item);
+        }
+        sound.DropDownItems.Add(new ToolStripSeparator());
+        var addSound = new ToolStripMenuItem("Добавить свой звук (mp3)…");
+        addSound.Click += (_, _) =>
+        {
+            SleepSound.EnsureSoundsDir();
+            System.Diagnostics.Process.Start("explorer.exe", SleepSound.SoundsFolder);
+        };
+        sound.DropDownItems.Add(addSound);
+        menu.Items.Add(sound);
+
         menu.Items.Add(new ToolStripSeparator());
 
         if (!Firebase.Settings.Configured)
@@ -104,6 +129,22 @@ public sealed class TrayApp : ApplicationContext
         var exit = new ToolStripMenuItem(hard ? "Выход недоступен во время блокировки" : "Выход") { Enabled = !hard };
         exit.Click += (_, _) => ExitThread();
         menu.Items.Add(exit);
+    }
+
+    System.Windows.Forms.Timer? _preview;
+
+    /// <summary>Короткая проба звука вне блокировки: играет несколько секунд и выключается.</summary>
+    void PreviewSound(SleepSound.Choice choice)
+    {
+        _preview?.Dispose();
+        if (choice.Id == SleepSound.None.Id) { SleepSound.Stop(); return; }
+        _preview = new System.Windows.Forms.Timer { Interval = 6000 };
+        _preview.Tick += (_, _) =>
+        {
+            _preview!.Stop();
+            if (!Rules.HardActive(Store.Get().Config, Store.Get().Session, DateTime.Now)) SleepSound.Stop();
+        };
+        _preview.Start();
     }
 
     /// <summary>Сессия с белым списком без программ, то есть полная блокировка компьютера.</summary>

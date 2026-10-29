@@ -35,6 +35,7 @@ Filename: "{app}\FocusWall.exe"; Description: "Запустить FocusWall"; Fl
 
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/Delete /F /TN ""FocusWall Watchdog"""; Flags: runhidden; RunOnceId: "DelWatchdog"
+Filename: "schtasks.exe"; Parameters: "/Delete /F /TN ""FocusWall Night"""; Flags: runhidden; RunOnceId: "DelNight"
 Filename: "taskkill.exe"; Parameters: "/F /IM FocusWall.exe"; Flags: runhidden; RunOnceId: "KillApp"
 
 [Registry]

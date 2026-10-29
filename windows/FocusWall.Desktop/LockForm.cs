@@ -6,7 +6,7 @@ public sealed class LockForm : Form
     readonly Label _left;
     bool _allowClose;
 
-    public LockForm(Screen screen)
+    public LockForm(Screen screen, bool withControls)
     {
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
@@ -55,6 +55,49 @@ public sealed class LockForm : Form
         panel.Controls.Add(icon, 0, 1);
         panel.Controls.Add(title, 0, 2);
         panel.Controls.Add(_left, 0, 3);
+
+        // Выбор звука для сна показываем только на главном экране.
+        if (withControls)
+        {
+            var sounds = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 24, 0, 0),
+            };
+            var caption = new Label
+            {
+                Text = "Звук для сна:",
+                ForeColor = _left.ForeColor,
+                Font = new Font("Segoe UI", 12),
+                AutoSize = true,
+                Margin = new Padding(0, 8, 8, 0),
+            };
+            var box = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("Segoe UI", 12),
+                Width = 220,
+            };
+            foreach (var c in SleepSound.All()) box.Items.Add(c);
+            box.DisplayMember = nameof(SleepSound.Choice.Title);
+            var current = Store.Get().SleepSound;
+            box.SelectedIndex = Math.Max(0, box.Items.Cast<SleepSound.Choice>().ToList().FindIndex(c => c.Id == current));
+            box.SelectedIndexChanged += (_, _) =>
+            {
+                if (box.SelectedItem is SleepSound.Choice ch)
+                {
+                    Store.Update(s => s.SleepSound = ch.Id);
+                    SleepSound.Play(ch);
+                }
+            };
+            sounds.Controls.Add(caption);
+            sounds.Controls.Add(box);
+            panel.Controls.Add(sounds, 0, 4);
+            panel.RowStyles[4] = new RowStyle(SizeType.Percent, 50);
+        }
+
         Controls.Add(panel);
     }
 
