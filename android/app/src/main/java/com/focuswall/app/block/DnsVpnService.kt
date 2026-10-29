@@ -83,7 +83,7 @@ class DnsVpnService : VpnService() {
             }
             if (n <= 0) continue
             val query = DnsPacket.parse(buf, n) ?: continue
-            if (System.currentTimeMillis() - policyAt > 15_000) {
+            if (System.currentTimeMillis() - policyAt > 3_000) {
                 policy = store.sitePolicy()
                 policyAt = System.currentTimeMillis()
             }

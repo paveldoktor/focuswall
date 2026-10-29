@@ -40,7 +40,7 @@ static class Program
         // Сторож: раз в минуту запускает программу, если её закрыли (лишняя копия сразу выходит по мьютексу).
         RunSchtasks($"/Create /F /SC MINUTE /MO 1 /TN \"FocusWall Watchdog\" /TR \"\\\"{exe}\\\"\"");
         // Отдельно — гарантированный запуск каждый вечер в 21:00, к началу ночной блокировки.
-        RunSchtasks($"/Create /F /SC DAILY /ST 21:00 /TN \"FocusWall Night\" /TR \"\\\"{exe}\\\"\"");
+        RunSchtasks($"/Create /F /SC DAILY /ST 21:00 /TN \"FocusWall Daily\" /TR \"\\\"{exe}\\\"\"");
     }
 
     static void RunSchtasks(string args)

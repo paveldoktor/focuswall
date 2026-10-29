@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -83,6 +84,13 @@ class BlockedActivity : ComponentActivity() {
                         )
                         Spacer(Modifier.height(24.dp))
                         Button(onClick = { goHome() }) { Text("На главный экран") }
+                        if (store.passAvailable()) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(onClick = {
+                                // Разблокировка одна за ночь: после нажатия вернуть её нельзя.
+                                if (store.startPass()) finish()
+                            }) { Text("Разблокировать на ${Store.PASS_MINUTES} минуты (один раз за ночь)") }
+                        }
                     }
                 }
             }

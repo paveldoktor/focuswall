@@ -63,4 +63,14 @@ class RulesTest {
         val until = Rules.blockedUntil(c, null, t("2026-10-27T23:00"), ZoneOffset.UTC)!!
         assertEquals(ms(t("2026-10-28T05:00")), until)
     }
+
+    @Test
+    fun nightKeyIsTheSameBeforeAndAfterMidnight() {
+        val evening = Rules.nightKey(c, t("2026-10-27T23:30"))
+        val morning = Rules.nightKey(c, t("2026-10-28T02:00"))
+        assertEquals("night:2026-10-27", evening)
+        assertEquals(evening, morning)
+        assertEquals("night:2026-10-28", Rules.nightKey(c, t("2026-10-28T21:05")))
+        assertNull(Rules.nightKey(c, t("2026-10-28T12:00")))
+    }
 }

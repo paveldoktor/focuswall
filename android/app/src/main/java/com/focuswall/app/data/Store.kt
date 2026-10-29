@@ -6,6 +6,7 @@ import com.focuswall.app.core.Config
 import com.focuswall.app.core.Defaults
 import com.focuswall.app.core.Json
 import com.focuswall.app.core.Policy
+import com.focuswall.app.core.PolicyMode
 import com.focuswall.app.core.Rules
 import com.focuswall.app.core.Session
 import java.time.LocalDateTime
@@ -64,10 +65,44 @@ class Store private constructor(context: Context) {
         get() = prefs.getString("syncError", "") ?: ""
         set(v) = edit { putString("syncError", v) }
 
+    // ----- Разовая разблокировка на ночь -----
+
+    /** Когда закончится разблокировка, мс. */
+    var passUntil: Long
+        get() = prefs.getLong("passUntil", 0)
+        private set(v) = edit { putLong("passUntil", v) }
+
+    /** Ключ ночи, в которую разблокировка уже использована (см. Rules.nightKey). */
+    private var passNight: String
+        get() = prefs.getString("passNight", "") ?: ""
+        set(v) = edit { putString("passNight", v) }
+
+    fun passActive(): Boolean = passUntil > System.currentTimeMillis()
+
+    /** Можно ли сейчас взять разблокировку: идёт жёсткая ночь, и в эту ночь её ещё не брали. */
+    fun passAvailable(): Boolean {
+        val key = Rules.nightKey(config, LocalDateTime.now()) ?: return false
+        return !passActive() && key != passNight
+    }
+
+    /** Включает разблокировку на [minutes] минут. Один раз за ночь; false, если нельзя. */
+    fun startPass(minutes: Int = PASS_MINUTES): Boolean {
+        if (!passAvailable()) return false
+        val key = Rules.nightKey(config, LocalDateTime.now()) ?: return false
+        // Сначала помечаем ночь использованной, потом включаем: если приложение убьют между шагами, второй попытки не будет.
+        passNight = key
+        passUntil = System.currentTimeMillis() + minutes * 60_000L
+        return true
+    }
+
     // ----- Вычисления «что блокировать сейчас» -----
 
-    fun appPolicy(): Policy = Rules.appPolicy(config, session, LocalDateTime.now(), System.currentTimeMillis())
-    fun sitePolicy(): Policy = Rules.sitePolicy(config, session, LocalDateTime.now(), System.currentTimeMillis())
+    private val noPolicy = Policy(PolicyMode.OFF, emptySet())
+
+    fun appPolicy(): Policy =
+        if (passActive()) noPolicy else Rules.appPolicy(config, session, LocalDateTime.now(), System.currentTimeMillis())
+    fun sitePolicy(): Policy =
+        if (passActive()) noPolicy else Rules.sitePolicy(config, session, LocalDateTime.now(), System.currentTimeMillis())
     fun hardActive(): Boolean = Rules.hardActive(config, session, LocalDateTime.now(), System.currentTimeMillis())
     fun blockedUntil(): Long? = Rules.blockedUntil(config, session, LocalDateTime.now())
 
@@ -87,6 +122,7 @@ class Store private constructor(context: Context) {
     }
 
     companion object {
+        const val PASS_MINUTES = 3
         @Volatile private var instance: Store? = null
         fun get(context: Context): Store =
             instance ?: synchronized(this) { instance ?: Store(context.applicationContext).also { instance = it } }

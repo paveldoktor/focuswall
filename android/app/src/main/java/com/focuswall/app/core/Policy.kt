@@ -100,6 +100,18 @@ object Rules {
         return null
     }
 
+    /**
+     * Ключ текущей ночи: id жёсткого расписания и дата, когда оно началось (после полуночи это вчера).
+     * Нужен, чтобы выдавать одну разблокировку на ночь. null, если жёсткого расписания сейчас нет.
+     */
+    fun nightKey(c: Config, now: LocalDateTime): String? {
+        val sc = c.schedules.firstOrNull { it.hard && scheduleActive(it, now) } ?: return null
+        val t = now.hour * 60 + now.minute
+        val crossesMidnight = minutesOf(sc.start) > minutesOf(sc.end)
+        val startDate = if (crossesMidnight && t < minutesOf(sc.start)) now.toLocalDate().minusDays(1) else now.toLocalDate()
+        return "${sc.id}:$startDate"
+    }
+
     /** Когда закончится текущая блокировка, в миллисекундах; null, если ничего не активно. */
     fun blockedUntil(c: Config, s: Session?, now: LocalDateTime, zone: ZoneId = ZoneId.systemDefault()): Long? {
         val nowMs = now.atZone(zone).toInstant().toEpochMilli()

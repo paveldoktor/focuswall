@@ -2,6 +2,11 @@ package com.focuswall.app.block
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.TextView
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -34,13 +39,64 @@ class BlockerAccessibilityService : AccessibilityService() {
         }
     }
 
+    private var passOverlay: TextView? = null
+    private val storeListener: () -> Unit = { handler.post { if (store.passActive()) startPassTimer() } }
+
+    private val passTick = object : Runnable {
+        override fun run() {
+            val left = store.passUntil - System.currentTimeMillis()
+            if (left > 0) {
+                passOverlay?.text = "Разблокировано ещё %d:%02d, потом снова блокировка".format(left / 60_000, left / 1000 % 60)
+                handler.postDelayed(this, 1000)
+            } else {
+                removePassOverlay()
+                // Разблокировка кончилась: сразу закрываем то, что открыто сейчас.
+                rootInActiveWindow?.packageName?.toString()?.let { pkg -> if (!checkApp(pkg)) checkBrowser(pkg, force = true) }
+            }
+        }
+    }
+
+    /** Показывает обратный отсчёт внизу экрана поверх любых приложений. */
+    private fun startPassTimer() {
+        if (passOverlay == null) {
+            val view = TextView(this).apply {
+                textSize = 17f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(0xE6151918.toInt())
+                gravity = Gravity.CENTER
+                setPadding(24, 28, 24, 28)
+            }
+            val lp = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            ).apply { gravity = Gravity.BOTTOM }
+            runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, lp) }.onSuccess { passOverlay = view }
+        }
+        handler.removeCallbacks(passTick)
+        handler.post(passTick)
+    }
+
+    private fun removePassOverlay() {
+        passOverlay?.let { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } }
+        passOverlay = null
+    }
+
     override fun onServiceConnected() {
         store = Store.get(this)
+        store.addListener(storeListener)
         handler.post(tick)
+        if (store.passActive()) startPassTimer()
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(passTick)
+        store.removeListener(storeListener)
+        removePassOverlay()
         super.onDestroy()
     }
 
